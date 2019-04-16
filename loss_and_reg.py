@@ -5,36 +5,66 @@ from numpy import ones, maximum, minimum, sign, floor, ceil
 
 # Abstract Loss class
 class Loss(object):
-    def __init__(self, mask=None):return
+    def __init__(self, mask=None):
+        self.mask = mask
     def loss(self, A, U): raise NotImplementedError("Override me!")
     def encode(self, A): return A # default
     def decode(self, A): return A # default
     def __str__(self): return "GLRM Loss: override me!"
-    def __call__(self, A, U): return self.loss(A, U)
+    def __call__(self, A, U, columns): return self.loss(A, U, columns)
 
 # class QuadraticLoss(Loss):
 #     def loss(self, A, U): return cp.sum_squares(A - U)
 #     def __str__(self): return "quadratic loss"
     
-class QuadraticLoss(Loss):
-    def loss(self, A, U): return cp.sum_squares(A - U)
-    def scaled_loss(self, A, U, sigma_arr,mask):
-        return cp.sum((cp.square(A-U)/sigma_arr)[mask])
-        
+class ScaledQuadraticLoss(Loss):
+    def loss(self, A, U, columns, sigma_arr):
+        if self.mask is not None:
+#             print("yikes")
+#             print(A.shape)
+#             print(U.shape)
+            return cp.sum((cp.square(A-U)/sigma_arr)[:,columns][self.mask[:,columns]])
+#             return cp.sum((cp.square(A[:,columns]-U[:,columns])/sigma_arr[:,columns])[self.mask[:,columns]])
+        else:
+            return cp.sum((cp.square(A[:,columns]-U[:,columns])/sigma_arr[:,columns]))
+    def __str__(self): return "scaled quadratic loss"
+    def __call__(self, A, U, columns,sigma_arr): return self.loss(A, U, columns,sigma_arr)
+    
+class QuadraticLoss(ScaledQuadraticLoss):
+    def loss(self, A, U, columns): 
+        return super().loss(A,U,columns,np.ones(A.shape,dtype=np.float))    
     def __str__(self): return "quadratic loss"
+    def __call__(self, A, U, columns): return self.loss(A, U, columns)
 
+    
 class HuberLoss(Loss):
     a = 1.0 # XXX does the value of 'a' propagate if we update it?
     def loss(self, A, U): return cp.sum(cp.huber(cp.Constant(A) - U, self.a))
     def __str__(self): return "huber loss"
 
-class HingeLoss(Loss):
-    def loss(self, A, U): return cp.sum(cp.pos(ones(A.shape)-cp.multiply(cp.Constant(A), U)))
-    def scaled_loss(self, A, U, sigma_arr, mask):
-        return cp.sum((cp.pos(np.ones(A.shape)-cp.multiply(A, U))/sigma_arr)[mask])
+    
+    
+    
+class ScaledHingeLoss(Loss):
+    def loss(self, A, U,columns,sigma_arr):
+        if self.mask is not None:
+            return cp.sum((cp.square(cp.pos(ones(A.shape)-cp.multiply(A, U)))/sigma_arr)[:,columns][self.mask[:,columns]])
+        else:
+            return cp.sum(cp.pos(ones(A.shape)-cp.multiply(A, U))[:,columns])
     def decode(self, A): return sign(A) # return back to Boolean
-    def __str__(self): return "hinge loss"
+    def __call__(self, A, U, columns,sigma_arr): return self.loss(A, U, columns,sigma_arr)
 
+class HingeLoss(ScaledHingeLoss):
+    def loss(self, A, U, columns): 
+        return super().loss(A,U,columns,np.ones(A.shape,dtype=np.float))    
+    def __str__(self): return "scaled hinge loss"
+    def __call__(self, A, U, columns): return self.loss(A, U, columns)
+
+    
+    
+    
+    
+    
 class OrdinalLoss(Loss):
     def __init__(self, Amin,Amax):
         """
