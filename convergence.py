@@ -47,9 +47,12 @@ class Convergence(object):
     def __bool__(self):
         return bool(self.check_convergence())
     
-    def plot(self,fmt='o--',label_stuff=True,show=True):
+    def plot(self,ylog=True,fmt='o--',label_stuff=True,show=True):
         plt.plot(self.objX,fmt,label='X')
         plt.plot(self.objY,fmt,label='Y')
+        if ylog:
+            plt.yscale('log')
+            
         if label_stuff:
             plt.legend()
             plt.title("model error")
